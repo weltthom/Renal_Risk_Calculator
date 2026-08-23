@@ -664,17 +664,10 @@ ui <- fluidPage(
           ),
 
           p(
-            "The calculator is based on the final Cox proportional ",
-            "hazards model developed jointly on pooled Freiburg and ",
-            "Zurich cohort data. ",
+            "The calculator is based on a Cox proportional hazards model developed in a two pooled cohorts of N = 27,059 (7,818 events) patients from the University Hospitals Freiburg, Germany and Zurich, Switzerland.",
+
             a(
-              "Original publication",
-              href = "https://onlinelibrary.wiley.com/doi/10.1111/joim.13736",
-              target = "_blank"
-            ),
-            " | ",
-            a(
-              "Multicenter validation publication",
+              "Publication",
               href = "SECOND_PUBLICATION_URL",
               target = "_blank"
             ), 
@@ -684,12 +677,6 @@ ui <- fluidPage(
               href = "https://github.com/weltthom/Renal_Risk_Calculator",
               target = "_blank"
             ),
-          ),
-
-          p(
-            "The model was developed on pooled Freiburg and Zurich data ",
-            "(n = 27,059; 7,818 events); ",
-            "see the linked publications for development and validation details."
           ),
 
           h3(
@@ -1079,4 +1066,5 @@ shinyApp(
   ui = ui,
   server = server
 )
+
 
