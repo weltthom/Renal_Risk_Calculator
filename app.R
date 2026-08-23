@@ -664,7 +664,7 @@ ui <- fluidPage(
           ),
 
           p(
-            "The calculator is based on a Cox proportional hazards model developed in a two pooled cohorts of N = 27,059 (7,818 events) patients from the University Hospitals Freiburg, Germany and Zurich, Switzerland.",
+            "The calculator is based on a Cox proportional hazards model developed in two pooled cohorts of N = 27,059 (7,818 events) patients from the University Hospitals Freiburg, Germany and Zurich, Switzerland.",
 
             a(
               "Publication",
