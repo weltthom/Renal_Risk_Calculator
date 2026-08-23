@@ -15,9 +15,30 @@ library(ggplot2)
 
 fit_dev_final <- readRDS("fit_dev_final_pooled.rds")
 
+
+# ============================================================
+# 1b. LIPID UNIT CONVERSION CONSTANTS
+# ============================================================
+# Model was fit using mg/dL for triglycerides and cholesterol.
+# Standard SI conversion factors, used to convert mmol/L inputs
+# to mg/dL before prediction.
+
+TG_MGDL_PER_MMOL <- 88.57
+CHOL_MGDL_PER_MMOL <- 38.67
+
+
 # ============================================================
 # 2. PREDICTION FUNCTION
 # ============================================================
+# Adapted from the pooled-model script. Two changes from that
+# version, both to keep the app consistent with its original
+# clinical framing (calculator is for patients with eGFR >=60,
+# predicting risk of dropping below that threshold):
+#   - eGFR validation floor raised from 15 to 60 (was matched to
+#     the app's UI restriction, per your choice to keep >=60)
+#   - eGFR validation ceiling left at 150, matching the function
+#     as given (UI numericInput max is separately capped at 200 -
+#     see note below if you want these aligned too)
 
 renal_risk <- function(
     sex,
@@ -92,12 +113,14 @@ renal_risk <- function(
   }
 
   # ----------------------------------------------------------
-  # Prediction
+  # Prediction (log-log CI: stays within [0,1] on the survival
+  # scale, standard choice for survival probabilities)
   # ----------------------------------------------------------
 
   sf <- survfit(
     fit_dev_final,
-    newdata = newdata
+    newdata = newdata,
+    conf.type = "log-log"
   )
 
   times_days <- times * 365.25
@@ -109,12 +132,20 @@ renal_risk <- function(
   )
 
   predicted_risk <- 1 - surv$surv
+  # survival CI flips to become the risk CI: the upper bound on
+  # survival is the lower bound on risk, and vice versa
+  risk_ci_lower <- 1 - surv$upper
+  risk_ci_upper <- 1 - surv$lower
 
   data.frame(
     time_years = times,
     predicted_risk = predicted_risk,
     predicted_risk_percent =
-      round(100 * predicted_risk, 1)
+      round(100 * predicted_risk, 1),
+    ci_lower_percent =
+      round(100 * risk_ci_lower, 1),
+    ci_upper_percent =
+      round(100 * risk_ci_upper, 1)
   )
 }
 
@@ -155,7 +186,7 @@ renal_survival_curve <- function(
   }
 
   if (eGFR < 60 || eGFR > 150) {
-    stop("This calculator is validated for eGFR >=60 mL/min/1.73 m² (up to 150).")
+    stop("This calculator is validated for eGFR >=60 mL/min/1.73 m2 (up to 150).")
   }
 
   if (triglycerides <= 0) {
@@ -190,7 +221,8 @@ renal_survival_curve <- function(
 
   sf <- survfit(
     fit_dev_final,
-    newdata = newdata
+    newdata = newdata,
+    conf.type = "log-log"
   )
 
   grid_years <- seq(0, max_years, length.out = n_points)
@@ -204,7 +236,9 @@ renal_survival_curve <- function(
 
   data.frame(
     time_years = grid_years,
-    risk = 1 - surv$surv
+    risk = 1 - surv$surv,
+    ci_lower = 1 - surv$upper,
+    ci_upper = 1 - surv$lower
   )
 }
 
@@ -437,6 +471,22 @@ ui <- fluidPage(
           ),
 
 
+          radioButtons(
+            inputId = "lipid_unit",
+
+            label = "Triglyceride / cholesterol units",
+
+            choices = c(
+              "mg/dL" = "mgdl",
+              "mmol/L" = "mmol"
+            ),
+
+            selected = "mgdl",
+
+            inline = TRUE
+          ),
+
+
           numericInput(
             "triglycerides",
             "Triglycerides (mg/dL)",
@@ -512,7 +562,15 @@ ui <- fluidPage(
 
                 div(
                   class = "risk-subtitle",
-                  "Probability of eGFR < 60 ml/min/1.73 m²"
+                  textOutput(
+                    "risk5_ci",
+                    inline = TRUE
+                  )
+                ),
+
+                div(
+                  class = "risk-subtitle",
+                  "Probability of eGFR < 60 ml/min/1.73m²"
                 )
 
               )
@@ -543,7 +601,15 @@ ui <- fluidPage(
 
                 div(
                   class = "risk-subtitle",
-                  "Probability of eGFR < 60 ml/min/1.73 m²"
+                  textOutput(
+                    "risk10_ci",
+                    inline = TRUE
+                  )
+                ),
+
+                div(
+                  class = "risk-subtitle",
+                  "Probability of eGFR < 60 ml/min/1.73m²"
                 )
 
               )
@@ -577,9 +643,9 @@ ui <- fluidPage(
             style = "margin-top:12px;",
             "This curve shows the model's predicted cumulative probability ",
             "that this patient's eGFR falls below 60 mL/min/1.73 m\u00b2 over time, ",
-            "based on their individual characteristics. It is the model's ",
-            "individualized prediction, not an empirical Kaplan-Meier curve ",
-            "estimated directly from cohort data."
+            "with the shaded band showing the 95% confidence interval. It is ",
+            "the model's individualized prediction, not an empirical ",
+            "Kaplan-Meier curve estimated directly from cohort data."
           )
 
         ),
@@ -678,6 +744,62 @@ server <- function(
     session
 ) {
 
+  # ==========================================================
+  # LIPID UNIT TOGGLE
+  # ==========================================================
+  # Converts displayed values/bounds when the user switches units.
+  # Actual mg/dL conversion for prediction happens separately below,
+  # at calculate time, using whatever unit is currently selected.
+
+  previous_lipid_unit <- reactiveVal("mgdl")
+
+  observeEvent(input$lipid_unit, {
+
+    old_unit <- isolate(previous_lipid_unit())
+    new_unit <- input$lipid_unit
+
+    if (identical(old_unit, new_unit)) {
+      return()
+    }
+
+    if (new_unit == "mmol" && old_unit == "mgdl") {
+
+      updateNumericInput(
+        session, "triglycerides",
+        label = "Triglycerides (mmol/L)",
+        value = round(input$triglycerides / TG_MGDL_PER_MMOL, 2),
+        min = 0.05, max = 30, step = 0.1
+      )
+
+      updateNumericInput(
+        session, "cholesterol",
+        label = "Total cholesterol (mmol/L)",
+        value = round(input$cholesterol / CHOL_MGDL_PER_MMOL, 2),
+        min = 0.05, max = 30, step = 0.1
+      )
+
+    } else if (new_unit == "mgdl" && old_unit == "mmol") {
+
+      updateNumericInput(
+        session, "triglycerides",
+        label = "Triglycerides (mg/dL)",
+        value = round(input$triglycerides * TG_MGDL_PER_MMOL, 1),
+        min = 0.1, max = 5000, step = 1
+      )
+
+      updateNumericInput(
+        session, "cholesterol",
+        label = "Total cholesterol (mg/dL)",
+        value = round(input$cholesterol * CHOL_MGDL_PER_MMOL, 1),
+        min = 0.1, max = 1000, step = 1
+      )
+
+    }
+
+    previous_lipid_unit(new_unit)
+
+  })
+
 
   # ==========================================================
   # CALCULATION
@@ -695,13 +817,27 @@ server <- function(
 
       tryCatch(
         {
+          # Convert lipid inputs to mg/dL (what the model was fit on)
+          # regardless of which unit the user selected
+          tg_mgdl <- if (input$lipid_unit == "mmol") {
+            input$triglycerides * TG_MGDL_PER_MMOL
+          } else {
+            input$triglycerides
+          }
+
+          chol_mgdl <- if (input$lipid_unit == "mmol") {
+            input$cholesterol * CHOL_MGDL_PER_MMOL
+          } else {
+            input$cholesterol
+          }
+
           out <- renal_risk(
             sex = input$sex,
             age = input$age,
             HbA1c = input$HbA1c,
             eGFR = input$eGFR,
-            triglycerides = input$triglycerides,
-            cholesterol = input$cholesterol,
+            triglycerides = tg_mgdl,
+            cholesterol = chol_mgdl,
             times = c(5, 10)
           )
 
@@ -710,13 +846,17 @@ server <- function(
             age = input$age,
             HbA1c = input$HbA1c,
             eGFR = input$eGFR,
-            triglycerides = input$triglycerides,
-            cholesterol = input$cholesterol
+            triglycerides = tg_mgdl,
+            cholesterol = chol_mgdl
           )
 
           list(
             risk5 = out$predicted_risk[out$time_years == 5],
             risk10 = out$predicted_risk[out$time_years == 10],
+            risk5_ci_lower = out$ci_lower_percent[out$time_years == 5],
+            risk5_ci_upper = out$ci_upper_percent[out$time_years == 5],
+            risk10_ci_lower = out$ci_lower_percent[out$time_years == 10],
+            risk10_ci_upper = out$ci_upper_percent[out$time_years == 10],
             curve = curve
           )
         },
@@ -760,6 +900,23 @@ server <- function(
   })
 
 
+  output$risk5_ci <- renderText({
+
+    r <- result()
+
+    if (is.null(r)) {
+      return("")
+    }
+
+    sprintf(
+      "95%% CI: %.1f%%\u2013%.1f%%",
+      r$risk5_ci_lower,
+      r$risk5_ci_upper
+    )
+
+  })
+
+
   # ==========================================================
   # 10 YEAR
   # ==========================================================
@@ -775,6 +932,23 @@ server <- function(
     sprintf(
       "%.1f%%",
       r$risk10 * 100
+    )
+
+  })
+
+
+  output$risk10_ci <- renderText({
+
+    r <- result()
+
+    if (is.null(r)) {
+      return("")
+    }
+
+    sprintf(
+      "95%% CI: %.1f%%\u2013%.1f%%",
+      r$risk10_ci_lower,
+      r$risk10_ci_upper
     )
 
   })
@@ -800,6 +974,11 @@ server <- function(
     )
 
     ggplot(curve, aes(x = time_years, y = risk)) +
+      geom_ribbon(
+        aes(ymin = ci_lower, ymax = ci_upper),
+        fill = "#F08080",
+        alpha = 0.15
+      ) +
       geom_line(color = "darkred", linewidth = 1.1) +
       geom_point(
         data = marker_points,
@@ -819,6 +998,11 @@ server <- function(
         fontface = "bold",
         size = 4.2
       ) +
+      geom_vline(
+        xintercept = c(5, 10),
+        linetype = "dashed",
+        color = "#90a4ae"
+      ) +
       scale_y_continuous(
         labels = function(x) paste0(x * 100, "%"),
         limits = c(0, 1)
@@ -826,16 +1010,11 @@ server <- function(
       scale_x_continuous(
         breaks = seq(0, 10, by = 2)
       ) +
-      geom_vline(
-        xintercept = c(5, 10),
-        linetype = "dashed",
-        color = "#90a4ae"
-      ) +
       labs(
         x = "Years since followup",
         y = "Probability of eGFR <60 ml/min/1.72 m²"
       ) +
-      theme_classic(base_size = 13) +
+      theme_classic(base_size = 13) + 
       theme(
         panel.grid.minor = element_blank(),
         axis.title = element_text(color = "#455a64"),
@@ -894,4 +1073,3 @@ shinyApp(
   ui = ui,
   server = server
 )
-
