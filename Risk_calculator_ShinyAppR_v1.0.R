@@ -13,7 +13,6 @@ library(dplyr)
 # ============================================================
 
 fit_dev_final <- readRDS("fit_dev_final_pooled.rds")
-summary(fit_dev_final)
 
 
 # ============================================================
@@ -47,7 +46,7 @@ renal_risk <- function(
   }
 
   if (eGFR < 60 || eGFR > 150) {
-    stop("This calculator is validated for eGFR ≥60 mL/min/1.73 m² (up to 150).")
+    stop("This calculator is validated for eGFR >=60 mL/min/1.73 m2 (up to 150).")
   }
 
   if (triglycerides <= 0) {
@@ -496,10 +495,39 @@ ui <- fluidPage(
           ),
 
           p(
-            "The model was developed on pooled Freiburg and Zurich data; ",
+            "The model was developed on pooled Freiburg and Zurich data ",
+            "(n = 27,059; 7,818 events); ",
             "see the linked publications for development and validation details."
-          )
+          ),
 
+          h3(
+            style = "color:#173f5f; font-size:16px; margin-top:22px; margin-bottom:10px;",
+            "How this calculator works"
+          ),
+
+          p(
+            class = "note",
+            style = "font-size:13px; line-height:1.7; color:#455a64;",
+            "This tool implements a Cox proportional hazards model relating ",
+            "sex, age, HbA1c, eGFR, triglycerides, and total cholesterol at ",
+            "baseline to the hazard of eGFR falling below 60 mL/min/1.73 m². ",
+            "Entering a patient's baseline values returns the model's estimated ",
+            "probability of crossing that threshold within 5 and 10 years, ",
+            "based on the fitted hazard ratios and baseline survival function ",
+            "from the pooled development cohort."
+          ),
+
+          p(
+            class = "note",
+            style = "font-size:13px; line-height:1.7; color:#455a64;",
+            "The calculator is restricted to patients with eGFR \u226560 ",
+            "mL/min/1.73 m\u00b2 at baseline, matching the population in which ",
+            "the model was developed and validated; predictions outside the ",
+            "input ranges shown are not supported. This tool is intended to ",
+            "illustrate the published model and to support clinical judgment, ",
+            "not to replace it \u2014 individual predictions should be interpreted ",
+            "alongside a patient's full clinical picture."
+          )
 
         )
 
