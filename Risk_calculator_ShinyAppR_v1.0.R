@@ -46,7 +46,7 @@ renal_risk <- function(
   }
 
   if (eGFR < 60 || eGFR > 150) {
-    stop("This calculator is validated for eGFR >=60 mL/min/1.73 m2 (up to 150).")
+    stop("This calculator is validated for eGFR ≥60 mL/min/1.73 m2 (up to 150).")
   }
 
   if (triglycerides <= 0) {
