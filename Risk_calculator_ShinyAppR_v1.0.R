@@ -1011,8 +1011,8 @@ server <- function(
         breaks = seq(0, 10, by = 2)
       ) +
       labs(
-        x = "Years since followup",
-        y = "Probability of eGFR <60 ml/min/1.72 m²"
+        x = "Years since follow up",
+        y = "Probability of eGFR < 60 ml/min/1.72 m²"
       ) +
       theme_classic(base_size = 13) + 
       theme(
@@ -1073,3 +1073,4 @@ shinyApp(
   ui = ui,
   server = server
 )
+
