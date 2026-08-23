@@ -11,7 +11,10 @@ pooled Freiburg and Zurich cohort data.
 
 Given a patient's sex, age, HbA1c, eGFR, triglycerides, and total
 cholesterol, the calculator returns the model's estimated probability
-of eGFR dropping below 60 mL/min/1.73 m² within 5 and 10 years.
+of eGFR dropping below 60 mL/min/1.73 m² within 5 and 10 years, along
+with a plot of that predicted cumulative risk over time (0-10 years).
+This is the model's individualized prediction for the entered patient,
+not an empirical Kaplan-Meier curve estimated directly from cohort data.
 
 The calculator is restricted to patients with eGFR ≥60 mL/min/1.73 m²
 at baseline, matching the population in which the model was developed
@@ -26,13 +29,13 @@ should be interpreted alongside a patient's full clinical picture.
 
 | File | Description |
 |---|---|
-| `Risk_calculator_ShinyAppR_v1.0.R` | Shiny application (UI + server + risk calculation) |
+| `app.R` | Shiny application (UI + server + risk calculation) |
 | `fit_dev_final_pooled.rds` | Fitted Cox model (pooled Freiburg + Zurich development cohort) |
 
 ## Running locally
 
 ```r
-install.packages(c("shiny", "survival", "dplyr"))
+install.packages(c("shiny", "survival", "dplyr", "ggplot2"))
 shiny::runApp()
 ```
 
@@ -75,3 +78,4 @@ triglycerides, total cholesterol at baseline. Endpoint: time to eGFR
 
 _Add a suggested citation (e.g. app DOI via Zenodo, or a reference to
 the validation publication) once available._
+
