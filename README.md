@@ -67,13 +67,6 @@ cohort (n = 27,059; 7,818 events). Predictors: sex, age, HbA1c, eGFR,
 triglycerides, total cholesterol at baseline. Endpoint: time to eGFR
 <60 mL/min/1.73 m².
 
-## Publications
-
-- Development (Freiburg cohort): Arnold F et al., "HbA1c-dependent
-  projection of long-term renal outcomes," *J Intern Med* 2024.
-  [doi:10.1111/joim.13736](https://onlinelibrary.wiley.com/doi/10.1111/joim.13736)
-- External validation (Zurich cohort): _add citation / DOI once published_
-
 ## Citing this tool
 
 _Add a suggested citation (e.g. app DOI via Zenodo, or a reference to
