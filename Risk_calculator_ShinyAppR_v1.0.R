@@ -6,6 +6,7 @@
 library(shiny)
 library(survival)
 library(dplyr)
+library(ggplot2)
 
 
 # ============================================================
@@ -14,10 +15,18 @@ library(dplyr)
 
 fit_dev_final <- readRDS("fit_dev_final_pooled.rds")
 
-
 # ============================================================
 # 2. PREDICTION FUNCTION
 # ============================================================
+# Adapted from the pooled-model script. Two changes from that
+# version, both to keep the app consistent with its original
+# clinical framing (calculator is for patients with eGFR >=60,
+# predicting risk of dropping below that threshold):
+#   - eGFR validation floor raised from 15 to 60 (was matched to
+#     the app's UI restriction, per your choice to keep >=60)
+#   - eGFR validation ceiling left at 150, matching the function
+#     as given (UI numericInput max is separately capped at 200 -
+#     see note below if you want these aligned too)
 
 renal_risk <- function(
     sex,
@@ -46,7 +55,7 @@ renal_risk <- function(
   }
 
   if (eGFR < 60 || eGFR > 150) {
-    stop("This calculator is validated for eGFR ≥60 mL/min/1.73 m2 (up to 150).")
+    stop("This calculator is validated for eGFR >=60 mL/min/1.73 m2 (up to 150).")
   }
 
   if (triglycerides <= 0) {
@@ -115,6 +124,96 @@ renal_risk <- function(
     predicted_risk = predicted_risk,
     predicted_risk_percent =
       round(100 * predicted_risk, 1)
+  )
+}
+
+
+# ============================================================
+# 2b. SURVIVAL CURVE FUNCTION (for plotting)
+# ============================================================
+# Shares the same validation and newdata construction as renal_risk()
+# above, but returns a fine time grid of predicted survival
+# probabilities instead of just two timepoints, for plotting the
+# patient's individualized predicted survival curve. Note this is
+# the *model's predicted* survival curve for this covariate profile,
+# not an empirical Kaplan-Meier curve (KM curves are nonparametric
+# cohort-level estimates, not something a Cox model produces for a
+# single hypothetical patient) - labelled accordingly in the plot.
+
+renal_survival_curve <- function(
+    sex,
+    age,
+    HbA1c,
+    eGFR,
+    triglycerides,
+    cholesterol,
+    max_years = 10,
+    n_points = 100
+) {
+
+  if (!sex %in% c("Male", "Female", "M", "F", "male", "female", "m", "f")) {
+    stop("sex must be Male or Female.")
+  }
+
+  if (age < 18 || age > 100) {
+    stop("Age is outside the supported range.")
+  }
+
+  if (HbA1c < 4 || HbA1c > 12) {
+    stop("HbA1c is outside the supported range.")
+  }
+
+  if (eGFR < 60 || eGFR > 150) {
+    stop("This calculator is validated for eGFR >=60 mL/min/1.73 m2 (up to 150).")
+  }
+
+  if (triglycerides <= 0) {
+    stop("Triglycerides must be > 0.")
+  }
+
+  if (cholesterol <= 0) {
+    stop("Cholesterol must be > 0.")
+  }
+
+  sex_model <- case_when(
+    sex %in% c("Male", "M", "male", "m") ~ "M",
+    sex %in% c("Female", "F", "female", "f") ~ "F",
+    TRUE ~ NA_character_
+  )
+
+  newdata <- data.frame(
+    sex = factor(
+      sex_model,
+      levels = fit_dev_final$xlevels$sex
+    ),
+    age_y1 = age,
+    HBA1_y1 = HbA1c,
+    eGFR_y1 = eGFR,
+    TG_y1_imputed = triglycerides,
+    CHOL_y1_imputed = cholesterol
+  )
+
+  if (anyNA(newdata)) {
+    stop("One or more input variables are invalid.")
+  }
+
+  sf <- survfit(
+    fit_dev_final,
+    newdata = newdata
+  )
+
+  grid_years <- seq(0, max_years, length.out = n_points)
+  grid_days <- grid_years * 365.25
+
+  surv <- summary(
+    sf,
+    times = grid_days,
+    extend = TRUE
+  )
+
+  data.frame(
+    time_years = grid_years,
+    risk = 1 - surv$surv
   )
 }
 
@@ -466,6 +565,36 @@ ui <- fluidPage(
 
 
         # ======================================================
+        # PREDICTED SURVIVAL CURVE
+        # ======================================================
+
+        div(
+          class = "card",
+
+          h2(
+            class = "card-title",
+            "Predicted survival curve"
+          ),
+
+          plotOutput(
+            "survival_curve",
+            height = "320px"
+          ),
+
+          div(
+            class = "note",
+            style = "margin-top:12px;",
+            "This curve shows the model's predicted cumulative probability ",
+            "that this patient's eGFR falls below 60 mL/min/1.73 m\u00b2 over time, ",
+            "based on their individual characteristics. It is the model's ",
+            "individualized prediction, not an empirical Kaplan-Meier curve ",
+            "estimated directly from cohort data."
+          )
+
+        ),
+
+
+        # ======================================================
         # MODEL INFORMATION
         # ======================================================
 
@@ -585,9 +714,19 @@ server <- function(
             times = c(5, 10)
           )
 
+          curve <- renal_survival_curve(
+            sex = input$sex,
+            age = input$age,
+            HbA1c = input$HbA1c,
+            eGFR = input$eGFR,
+            triglycerides = input$triglycerides,
+            cholesterol = input$cholesterol
+          )
+
           list(
             risk5 = out$predicted_risk[out$time_years == 5],
-            risk10 = out$predicted_risk[out$time_years == 10]
+            risk10 = out$predicted_risk[out$time_years == 10],
+            curve = curve
           )
         },
 
@@ -646,6 +785,71 @@ server <- function(
       "%.1f%%",
       r$risk10 * 100
     )
+
+  })
+
+
+  # ==========================================================
+  # SURVIVAL CURVE PLOT
+  # ==========================================================
+
+  output$survival_curve <- renderPlot({
+
+    r <- result()
+
+    if (is.null(r)) {
+      return(NULL)
+    }
+
+    curve <- r$curve
+
+    marker_points <- data.frame(
+      time_years = c(5, 10),
+      risk = c(r$risk5, r$risk10)
+    )
+
+    ggplot(curve, aes(x = time_years, y = risk)) +
+      geom_line(color = "darkred", linewidth = 1.1) +
+      geom_point(
+        data = marker_points,
+        aes(x = time_years, y = risk),
+        color = "darkred",
+        size = 3
+      ) +
+      geom_text(
+        data = marker_points,
+        aes(
+          x = time_years,
+          y = risk,
+          label = sprintf("%.1f%%", risk * 100)
+        ),
+        vjust = -1.1,
+        color = "darkred",
+        fontface = "bold",
+        size = 4.2
+      ) +
+      scale_y_continuous(
+        labels = function(x) paste0(x * 100, "%"),
+        limits = c(0, 1)
+      ) +
+      scale_x_continuous(
+        breaks = seq(0, 10, by = 2)
+      ) +
+      geom_vline(
+        xintercept = c(5, 10),
+        linetype = "dashed",
+        color = "#90a4ae"
+      ) +
+      labs(
+        x = "Years since followup",
+        y = "Probability of eGFR <60 ml/min/1.72 m²"
+      ) +
+      theme_classic(base_size = 13) +
+      theme(
+        panel.grid.minor = element_blank(),
+        axis.title = element_text(color = "#455a64"),
+        axis.text = element_text(color = "#607d8b")
+      )
 
   })
 
