@@ -674,10 +674,16 @@ ui <- fluidPage(
             ),
             " | ",
             a(
-              "External validation publication",
+              "Multicenter validation publication",
               href = "SECOND_PUBLICATION_URL",
               target = "_blank"
-            )
+            ), 
+            " | ",
+            a(
+              "Source code",
+              href = "https://github.com/weltthom/Renal_Risk_Calculator",
+              target = "_blank"
+            ),
           ),
 
           p(
