@@ -18,15 +18,6 @@ fit_dev_final <- readRDS("fit_dev_final_pooled.rds")
 # ============================================================
 # 2. PREDICTION FUNCTION
 # ============================================================
-# Adapted from the pooled-model script. Two changes from that
-# version, both to keep the app consistent with its original
-# clinical framing (calculator is for patients with eGFR >=60,
-# predicting risk of dropping below that threshold):
-#   - eGFR validation floor raised from 15 to 60 (was matched to
-#     the app's UI restriction, per your choice to keep >=60)
-#   - eGFR validation ceiling left at 150, matching the function
-#     as given (UI numericInput max is separately capped at 200 -
-#     see note below if you want these aligned too)
 
 renal_risk <- function(
     sex,
@@ -903,5 +894,4 @@ shinyApp(
   ui = ui,
   server = server
 )
-
 
