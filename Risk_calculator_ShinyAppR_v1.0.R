@@ -164,7 +164,7 @@ renal_survival_curve <- function(
   }
 
   if (eGFR < 60 || eGFR > 150) {
-    stop("This calculator is validated for eGFR >=60 mL/min/1.73 m2 (up to 150).")
+    stop("This calculator is validated for eGFR >=60 mL/min/1.73 m² (up to 150).")
   }
 
   if (triglycerides <= 0) {
@@ -492,7 +492,7 @@ ui <- fluidPage(
 
           h2(
             class = "card-title",
-            "Predicted absolute risk"
+            "Predicted risk of eGFR < 60 ml/min/1.73 m²"
           ),
 
 
@@ -521,7 +521,7 @@ ui <- fluidPage(
 
                 div(
                   class = "risk-subtitle",
-                  "Probability of eGFR < 60 ml/min/1.73m²"
+                  "Probability of eGFR < 60 ml/min/1.73 m²"
                 )
 
               )
@@ -552,7 +552,7 @@ ui <- fluidPage(
 
                 div(
                   class = "risk-subtitle",
-                  "Probability of eGFR < 60 ml/min/1.73m²"
+                  "Probability of eGFR < 60 ml/min/1.73 m²"
                 )
 
               )
@@ -573,7 +573,7 @@ ui <- fluidPage(
 
           h2(
             class = "card-title",
-            "Predicted survival curve"
+            "Risk curve"
           ),
 
           plotOutput(
@@ -903,3 +903,4 @@ shinyApp(
   ui = ui,
   server = server
 )
+
