@@ -29,7 +29,7 @@ should be interpreted alongside a patient's full clinical picture.
 
 | File | Description |
 |---|---|
-| `app.R` | Shiny application (UI + server + risk calculation) |
+| `Risk_calculator_ShinyAppR_v1.0.R` | Shiny application (UI + server + risk calculation) |
 | `fit_dev_final_pooled.rds` | Fitted Cox model (pooled Freiburg + Zurich development cohort) |
 
 ## Running locally
