@@ -291,7 +291,7 @@ ui <- fluidPage(
       }
 
       .risk-value {
-        color: #173f5f;
+        color: darkred;
         font-size: 48px;
         font-weight: bold;
         margin-top: 12px;
@@ -903,4 +903,5 @@ shinyApp(
   ui = ui,
   server = server
 )
+
 
